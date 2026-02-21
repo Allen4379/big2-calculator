@@ -4,8 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <!-- 
-    2026 馬年特仕版 - iOS 26 視覺升級專案
-    架構：HTML5 + React 18 + TailwindCSS + 原生 Canvas API 粒子引擎
+    ========================================================================
+    2026 馬年特仕版 - 高穩定度長輩友善版 & 雙模式視覺引擎
+    
+    技術堆疊：HTML5 + React 18 + TailwindCSS + 原生 Canvas API (物理運算)
+    設計語彙：iOS Human Interface Guidelines (大觸控區、高對比、無捲動)
+    ========================================================================
   -->
   <title>2026 金馬迎春．大老二記分所</title>
   
@@ -15,48 +19,52 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
-    /* ==========================================
-       iOS 26 設計系統 & 變數宣告
-       強調高動態範圍的色彩與極致的留白
-    ========================================== */
+    /* =====================================================================
+       核心設計系統 (Design System)
+       定義全域的 CSS 變數，方便日後抽換主題。
+    ===================================================================== */
     :root {
+      /* 安全區考量，確保不被瀏海或底部白條遮擋 */
       --safe-top: env(safe-area-inset-top, 44px);
       --safe-bottom: env(safe-area-inset-bottom, 34px);
       
-      /* 色彩系統：深邃的勃艮第紅與閃耀金 */
-      --color-bg-deep: #1a0000;
-      --color-bg-mid: #3f0000;
-      --color-gold-light: #fef08a;
-      --color-gold-base: #fbbf24;
-      --color-gold-dark: #b45309;
-      --color-glass-border: rgba(255, 255, 255, 0.12);
-      --color-glass-bg: rgba(30, 0, 0, 0.55);
+      /* 節慶模式色彩：深邃醇厚的紅底與耀眼金 */
+      --color-festive-bg-deep: #140000;
+      --color-festive-bg-mid: #3a0000;
+      --color-festive-gold: #fbbf24;
+      --color-festive-glass: rgba(40, 5, 5, 0.65);
+      
+      /* 簡潔模式色彩：極致黑與內斂的灰色調，降低視覺負擔 */
+      --color-minimal-bg: #0a0a0a;
+      --color-minimal-glass: rgba(25, 25, 25, 0.85);
+      --color-minimal-accent: #e5e5e5;
     }
 
-    /* 基礎重置與防呆，死守「不捲動」原則 */
+    /* 環境重置：
+       最關鍵的是 touch-action: none 與 overflow: hidden。
+       這兩者聯手徹底殺死 iOS Safari 上任何預期外的滑動、下拉更新、回彈效果。
+       我們要在這個畫布內，用 Flexbox 建立自己的秩序。
+    */
     body {
       margin: 0;
       padding: 0;
-      background-color: var(--color-bg-deep);
+      background-color: var(--color-festive-bg-deep); /* 預設底色，避免載入閃爍 */
       color: #ffffff;
       overflow: hidden; 
-      /* 字體家族：蘋果生態系優先，呈現未來質感 */
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang TC", "Helvetica Neue", sans-serif;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
-      touch-action: none; /* 徹底封殺瀏覽器預設手勢（如下拉更新） */
+      touch-action: none;
     }
 
     #root {
       width: 100vw;
-      height: 100dvh;
+      /* 使用 100dvh (Dynamic Viewport Height)，動態適應網址列的收合 */
+      height: 100dvh; 
       position: relative;
     }
 
-    /* ==========================================
-       Canvas 畫布專屬圖層
-       放在最底層，不干擾任何 DOM 操作
-    ========================================== */
+    /* --- Canvas 繪圖層，置於最底端 --- */
     #fx-canvas {
       position: absolute;
       top: 0;
@@ -64,66 +72,77 @@
       width: 100%;
       height: 100%;
       z-index: 0;
-      pointer-events: none; /* 事件穿透，讓下方按鈕可被點擊 */
+      pointer-events: none; /* 讓使用者的觸控直接穿透到下方的 React 元件 */
     }
 
-    /* ==========================================
-       Glassmorphism 毛玻璃質感 (iOS 26 核心語彙)
-       利用多重陰影與背景模糊打造深度
-    ========================================== */
-    .ios-glass-card {
-      background: var(--color-glass-bg);
-      backdrop-filter: blur(28px) saturate(200%);
-      -webkit-backdrop-filter: blur(28px) saturate(200%);
-      border: 1px solid var(--color-glass-border);
-      /* 內外陰影疊加，製造懸浮感 */
-      box-shadow: 
-        0 24px 48px rgba(0, 0, 0, 0.4), 
-        inset 0 1px 1px rgba(255, 255, 255, 0.15);
-      border-radius: 28px;
+    /* --- UI 元件樣式 --- */
+    /* 高對比毛玻璃：長輩版特別加深了背景的透明度，
+       捨棄過度通透的設計，確保上方數字與文字的清晰度。
+    */
+    .ui-card-festive {
+      background: var(--color-festive-glass);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      border-radius: 24px;
     }
 
-    .ios-glass-nav {
-      background: rgba(20, 0, 0, 0.75);
-      backdrop-filter: blur(40px) saturate(250%);
-      -webkit-backdrop-filter: blur(40px) saturate(250%);
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+    .ui-card-minimal {
+      background: var(--color-minimal-glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 24px;
     }
 
-    /* 文字流光特效：中國風標題使用 */
-    @keyframes text-shine {
-      0% { background-position: 0% 50%; }
-      100% { background-position: 200% 50%; }
+    .ui-nav-bar {
+      background: rgba(10, 0, 0, 0.85);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* 數字字體優化，確保寬度一致，避免數字跳動 */
+    .num-display { 
+      font-variant-numeric: tabular-nums; 
+      letter-spacing: -0.02em;
     }
     
-    .text-shine-gold {
+    /* 內部捲軸隱藏，僅在歷史紀錄區開放垂直滾動 */
+    .history-scroll { 
+      scrollbar-width: none; 
+      overflow-y: auto; 
+      overflow-x: hidden; 
+      overscroll-behavior: contain; /* 阻止滾動鏈結，避免拖動到底層 */
+    }
+    .history-scroll::-webkit-scrollbar { display: none; }
+
+    /* 按鈕的物理回饋感 */
+    .btn-press:active {
+      transform: scale(0.94);
+      transition: transform 0.05s ease-out;
+    }
+
+    /* 流光文字動畫 */
+    @keyframes gold-shine {
+      0% { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+    .text-gold-shine {
       background: linear-gradient(
-        110deg, 
-        var(--color-gold-dark) 0%, 
-        var(--color-gold-base) 20%, 
-        #ffffff 40%, 
-        var(--color-gold-base) 60%, 
-        var(--color-gold-dark) 100%
+        100deg, 
+        #b45309 20%, 
+        #fef08a 45%, 
+        #ffffff 50%, 
+        #fef08a 55%, 
+        #b45309 80%
       );
       background-size: 200% auto;
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
-      animation: text-shine 5s linear infinite;
-    }
-
-    /* 工具類別 */
-    .tabular-nums { font-variant-numeric: tabular-nums; }
-    
-    /* 隱藏原生捲軸但保留捲動功能 (歷史紀錄區使用) */
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { scrollbar-width: none; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
-
-    /* 按鈕點擊的回饋動畫 */
-    .ios-active-scale:active {
-      transform: scale(0.96);
-      transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: gold-shine 6s linear infinite;
     }
   </style>
 </head>
@@ -134,12 +153,27 @@
     const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
     /* =====================================================================
-       [核心引擎] Canvas API 高性能粒子系統
-       這裡處理所有視覺特效，釋放 DOM 節點的壓力。
-       包含：紅包雨、背景星塵呼吸、勝利金幣噴發。
+       [系統底層] 狀態持久化 Hook
+       用來處理 localStorage 讀寫，避免污染主元件的邏輯乾淨度。
+    ===================================================================== */
+    function useStickyState(defaultValue, key) {
+      const [value, setValue] = useState(() => {
+        const stickyValue = window.localStorage.getItem(key);
+        return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+      });
+      useEffect(() => {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      }, [key, value]);
+      return [value, setValue];
+    }
+
+    /* =====================================================================
+       [視覺引擎] HTML5 Canvas 高效能渲染器
+       這次的重點是「優雅」與「物理真實感」。
+       我們不依賴任何外部圖檔，所有燈籠、流蘇、金馬都是由數學與幾何繪製。
     ===================================================================== */
     
-    // 基礎數學與向量工具 (避免依賴外部庫)
+    // 基礎物理向量
     class Vector2 {
       constructor(x = 0, y = 0) { this.x = x; this.y = y; }
       add(v) { this.x += v.x; this.y += v.y; return this; }
@@ -147,244 +181,333 @@
       mult(n) { this.x *= n; this.y *= n; return this; }
       mag() { return Math.sqrt(this.x * this.x + this.y * this.y); }
       normalize() { const m = this.mag(); if (m !== 0) this.mult(1 / m); return this; }
-      copy() { return new Vector2(this.x, this.y); }
     }
 
-    const randomRange = (min, max) => Math.random() * (max - min) + min;
+    // 環境常數
+    const PHYSICS = {
+      gravity: 0.8,
+      windPhase: 0,
+      windSpeed: 0.01,
+      getWind: () => Math.sin(PHYSICS.windPhase) * 0.05 + (Math.random() * 0.02 - 0.01)
+    };
 
-    // --- 粒子基底類別 ---
-    class Particle {
-      constructor(x, y) {
-        this.pos = new Vector2(x, y);
-        this.vel = new Vector2(0, 0);
-        this.acc = new Vector2(0, 0);
-        this.life = 1.0; 
-        this.decay = randomRange(0.005, 0.015);
-      }
-      applyForce(force) { this.acc.add(force); }
-      update() {
-        this.vel.add(this.acc);
-        this.pos.add(this.vel);
-        this.acc.mult(0); // 每幀重置加速度
-        this.life -= this.decay;
-      }
-      isDead() { return this.life <= 0; }
-    }
-
-    // --- 特效 A：馬年紅包雨 ---
-    class RedEnvelope extends Particle {
-      constructor(canvasWidth, canvasHeight) {
-        // 從頂部隨機位置出生
-        super(randomRange(0, canvasWidth), randomRange(-100, -20));
-        this.canvasHeight = canvasHeight;
-        this.width = randomRange(16, 28);
-        this.height = this.width * 1.4;
-        this.vel = new Vector2(randomRange(-0.5, 0.5), randomRange(2, 4));
-        this.mass = this.width * 0.05;
-        this.angle = randomRange(0, Math.PI * 2);
-        this.spin = randomRange(-0.05, 0.05);
-        this.wobblePhase = randomRange(0, Math.PI * 2);
-        this.wobbleSpeed = randomRange(0.02, 0.05);
-        // 紅包的生命週期由掉出畫面決定，不隨時間衰減
-        this.decay = 0; 
-      }
-
-      update() {
-        super.update();
-        this.angle += this.spin;
-        this.wobblePhase += this.wobbleSpeed;
-        // 加入空氣阻力造成的左右搖擺 (Swaying)
-        this.pos.x += Math.sin(this.wobblePhase) * 1.5;
+    // --- 實體：單擺燈籠 (Pendulum Lantern) ---
+    // 模擬真實燈籠掛在頂部的搖曳感
+    class Lantern {
+      constructor(originX, originY, length, size, isLeft) {
+        this.origin = new Vector2(originX, originY); // 懸掛點
+        this.length = length; // 繩長
+        this.size = size; // 燈籠大小比例
         
-        // 如果掉出畫面底部，標記死亡
-        if (this.pos.y > this.canvasHeight + 100) {
-          this.life = 0;
+        // 單擺物理屬性
+        this.angle = isLeft ? 0.1 : -0.1; // 初始角度
+        this.aVelocity = 0; // 角速度
+        this.aAcceleration = 0; // 角加速度
+        this.damping = 0.995; // 阻尼(空氣阻力)，讓它不會無止盡越晃越大
+        
+        // 流蘇系統 (Tassels) - 利用簡易的 Verlet 積分模擬多段柔性繩索
+        this.tassels = [];
+        const numSegments = 5;
+        for (let i = 0; i < numSegments; i++) {
+          this.tassels.push({
+            pos: new Vector2(0, 0),
+            oldPos: new Vector2(0, 0)
+          });
+        }
+        this.tasselLen = this.size * 0.6;
+      }
+
+      update() {
+        // 1. 計算單擺運動
+        // 公式：角加速度 = (-重力 / 繩長) * sin(角度) + 風力影響
+        const wind = PHYSICS.getWind() * 0.02;
+        this.aAcceleration = (-PHYSICS.gravity * 0.05 / this.length) * Math.sin(this.angle) + wind;
+        this.aVelocity += this.aAcceleration;
+        this.aVelocity *= this.damping;
+        this.angle += this.aVelocity;
+
+        // 計算燈籠本體目前的絕對座標
+        this.lanternX = this.origin.x + this.length * Math.sin(this.angle);
+        this.lanternY = this.origin.y + this.length * Math.cos(this.angle);
+
+        // 2. 更新下方流蘇的物理 (Verlet Integration)
+        const tasselBaseX = this.lanternX + Math.sin(this.angle) * this.size;
+        const tasselBaseY = this.lanternY + Math.cos(this.angle) * this.size;
+        
+        this.tassels[0].pos.x = tasselBaseX;
+        this.tassels[0].pos.y = tasselBaseY;
+
+        for (let i = 1; i < this.tassels.length; i++) {
+          const t = this.tassels[i];
+          // 施加重力與風力
+          const vx = (t.pos.x - t.oldPos.x) * 0.95 + wind * 5;
+          const vy = (t.pos.y - t.oldPos.y) * 0.95 + PHYSICS.gravity;
+          
+          t.oldPos.x = t.pos.x;
+          t.oldPos.y = t.pos.y;
+          
+          t.pos.x += vx;
+          t.pos.y += vy;
+
+          // 約束繩索長度 (Constraint)
+          const dx = t.pos.x - this.tassels[i-1].pos.x;
+          const dy = t.pos.y - this.tassels[i-1].pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const diff = this.tasselLen - dist;
+          const percent = diff / dist / 2;
+          const offsetX = dx * percent;
+          const offsetY = dy * percent;
+
+          t.pos.x += offsetX;
+          t.pos.y += offsetY;
         }
       }
 
       draw(ctx) {
+        // 畫懸掛的繩子
+        ctx.beginPath();
+        ctx.moveTo(this.origin.x, this.origin.y);
+        ctx.lineTo(this.lanternX, this.lanternY);
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)'; // 暗金色
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
         ctx.save();
-        ctx.translate(this.pos.x, this.pos.y);
+        ctx.translate(this.lanternX, this.lanternY);
         ctx.rotate(this.angle);
-        
-        // 畫紅包主體 (帶點微光)
-        ctx.fillStyle = '#dc2626'; // Tailwind red-600
-        ctx.shadowColor = 'rgba(220, 38, 38, 0.5)';
-        ctx.shadowBlur = 10;
+
+        // 繪製燈籠光暈
+        const glow = ctx.createRadialGradient(0, 0, this.size * 0.2, 0, 0, this.size * 2);
+        glow.addColorStop(0, 'rgba(220, 38, 38, 0.4)');
+        glow.addColorStop(1, 'rgba(220, 38, 38, 0)');
+        ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.roundRect(-this.width/2, -this.height/2, this.width, this.height, 3);
+        ctx.arc(0, 0, this.size * 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // 畫紅包上蓋折角
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#b91c1c'; // Tailwind red-700
+        // 繪製燈籠本體 (紅底橢圓)
+        ctx.fillStyle = '#dc2626';
         ctx.beginPath();
-        ctx.moveTo(-this.width/2, -this.height/2);
-        ctx.lineTo(0, -this.height/4);
-        ctx.lineTo(this.width/2, -this.height/2);
+        ctx.ellipse(0, 0, this.size * 0.85, this.size, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // 畫中央黃金裝飾鈕扣
-        ctx.fillStyle = '#fbbf24'; // Tailwind amber-400
-        ctx.beginPath();
-        ctx.arc(0, -this.height/8, this.width/6, 0, Math.PI * 2);
-        ctx.fill();
+        // 燈籠上的金線骨架
+        ctx.strokeStyle = '#b91c1c';
+        ctx.lineWidth = 1.5;
+        for(let i = 0.2; i <= 0.8; i+=0.3) {
+           ctx.beginPath();
+           ctx.ellipse(0, 0, this.size * i, this.size, 0, 0, Math.PI * 2);
+           ctx.stroke();
+        }
+
+        // 上下金色裝飾蓋
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(-this.size * 0.3, -this.size * 1.1, this.size * 0.6, this.size * 0.15);
+        ctx.fillRect(-this.size * 0.25, this.size * 0.95, this.size * 0.5, this.size * 0.15);
 
         ctx.restore();
+
+        // 畫流蘇 (不用 rotate，因為物理已計算絕對座標)
+        ctx.beginPath();
+        ctx.moveTo(this.tassels[0].pos.x, this.tassels[0].pos.y);
+        for (let i = 1; i < this.tassels.length; i++) {
+          ctx.lineTo(this.tassels[i].pos.x, this.tassels[i].pos.y);
+        }
+        ctx.strokeStyle = '#ea580c'; // 橙紅色
+        ctx.lineWidth = 3;
+        ctx.stroke();
       }
     }
 
-    // --- 特效 B：背景呼吸星塵 ---
-    class GoldDust extends Particle {
-      constructor(canvasWidth, canvasHeight) {
-        super(randomRange(0, canvasWidth), randomRange(0, canvasHeight));
-        this.radius = randomRange(0.5, 2.5);
-        // 緩慢向上漂浮
-        this.vel = new Vector2(randomRange(-0.2, 0.2), randomRange(-0.1, -0.5));
-        this.decay = randomRange(0.001, 0.003); // 壽命很長
-        this.maxLife = 1.0;
-        // 初始透明度隨機，呈現呼吸感
-        this.pulsePhase = randomRange(0, Math.PI * 2);
+    // --- 實體：背景金馬剪影 (Golden Horse Silhouette) ---
+    // 利用貝茲曲線動態畫出優雅的馬
+    class HorseEmblem {
+      constructor(width, height) {
+        this.x = width * 0.5;
+        this.y = height * 0.4;
+        this.scale = width < 400 ? 1.2 : 1.8; // 根據螢幕寬度縮放
+        this.pulsePhase = 0;
       }
-
-      update() {
-        super.update();
-        this.pulsePhase += 0.02;
-      }
-
-      draw(ctx) {
-        ctx.save();
-        // 呼吸燈透明度計算
-        const alpha = Math.max(0, Math.sin(this.pulsePhase) * 0.5 + 0.5) * this.life;
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = '#fde68a'; // Tailwind amber-200
-        ctx.shadowColor = '#fbbf24';
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // --- Canvas 管理與渲染引擎 ---
-    const CanvasManager = () => {
-      const canvasRef = useRef(null);
       
+      update() {
+        this.pulsePhase += 0.015;
+      }
+
+      draw(ctx, isMinimal) {
+        // 如果是簡潔模式，不畫馬，保持畫面乾淨
+        if (isMinimal) return;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.scale, this.scale);
+        
+        // 呼吸透明度
+        const alpha = Math.sin(this.pulsePhase) * 0.03 + 0.06; 
+        ctx.globalAlpha = alpha;
+        
+        // 這裡我們不載入圖檔，直接刻出馬的抽象幾何線條，展現 Canvas 的威力
+        ctx.strokeStyle = '#fde68a'; 
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        ctx.beginPath();
+        // 馬頭與脖子
+        ctx.moveTo(10, -35);
+        ctx.quadraticCurveTo(25, -20, 15, 0);
+        ctx.quadraticCurveTo(5, 20, -10, 25);
+        // 馬背
+        ctx.quadraticCurveTo(-30, 30, -45, 20);
+        ctx.quadraticCurveTo(-55, 10, -60, -5);
+        // 後腿
+        ctx.quadraticCurveTo(-60, 25, -70, 45);
+        ctx.lineTo(-65, 45);
+        ctx.quadraticCurveTo(-50, 15, -40, 25);
+        // 腹部與前腿
+        ctx.quadraticCurveTo(-20, 35, 0, 30);
+        ctx.quadraticCurveTo(15, 50, 25, 45);
+        ctx.lineTo(20, 40);
+        ctx.quadraticCurveTo(10, 25, 15, 10);
+        // 臉部細節
+        ctx.quadraticCurveTo(35, -5, 40, -20);
+        ctx.quadraticCurveTo(30, -30, 20, -30);
+        ctx.lineTo(10, -35);
+        
+        // 鬃毛點綴
+        ctx.moveTo(15, 0); ctx.lineTo(0, -15);
+        ctx.moveTo(5, 15); ctx.lineTo(-10, 0);
+        
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // --- 實體：環境星塵粒子 ---
+    class StarDust {
+      constructor(w, h) {
+        this.x = Math.random() * w;
+        this.y = Math.random() * h;
+        this.size = Math.random() * 1.5 + 0.5;
+        this.speedY = Math.random() * -0.5 - 0.1;
+        this.speedX = Math.random() * 0.4 - 0.2;
+        this.life = Math.random() * Math.PI * 2;
+        this.w = w;
+        this.h = h;
+      }
+      update() {
+        this.x += this.speedX + PHYSICS.getWind() * 2;
+        this.y += this.speedY;
+        this.life += 0.02;
+        if (this.y < -10) this.y = this.h + 10;
+        if (this.x < -10) this.x = this.w + 10;
+        if (this.x > this.w + 10) this.x = -10;
+      }
+      draw(ctx, isMinimal) {
+        if (isMinimal) return;
+        const alpha = (Math.sin(this.life) * 0.5 + 0.5) * 0.4;
+        ctx.fillStyle = `rgba(253, 230, 138, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // --- 負責統籌與管理的 Canvas 引擎組件 ---
+    const CanvasEngine = ({ theme }) => {
+      const canvasRef = useRef(null);
+      const isMinimal = theme === 'minimal';
+
       useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext('2d', { alpha: false }); // 關閉 alpha 通道以榨取極致效能
+        const ctx = canvas.getContext('2d', { alpha: false }); // 關閉 Alpha 以優化效能
         
-        let width = window.innerWidth;
-        let height = window.innerHeight;
-        let animationFrameId;
+        let animationId;
+        let width, height;
+        
+        // 場景物件
+        let leftLantern, rightLantern, horse;
+        let dusts = [];
 
-        // 處理 Retina 螢幕高解析度 (DPI)
-        const setupCanvas = () => {
+        const initScene = () => {
           width = window.innerWidth;
           height = window.innerHeight;
           const dpr = window.devicePixelRatio || 1;
           canvas.width = width * dpr;
           canvas.height = height * dpr;
           ctx.scale(dpr, dpr);
+
+          // 根據螢幕寬度決定燈籠大小
+          const lanternSize = width < 400 ? 25 : 35;
+          const ropeLen = height * 0.15;
+          
+          leftLantern = new Lantern(width * 0.15, -10, ropeLen, lanternSize, true);
+          rightLantern = new Lantern(width * 0.85, -10, ropeLen * 1.2, lanternSize * 0.9, false);
+          horse = new HorseEmblem(width, height);
+          
+          dusts = [];
+          for(let i=0; i<40; i++) dusts.push(new StarDust(width, height));
         };
-        setupCanvas();
-        window.addEventListener('resize', setupCanvas);
 
-        // 粒子陣列
-        const envelopes = [];
-        const dusts = [];
-        
-        // 環境力
-        const gravity = new Vector2(0, 0.05);
+        initScene();
+        window.addEventListener('resize', initScene);
 
-        // 主渲染迴圈
-        const render = () => {
-          // 繪製深邃背景漸層 (取代原本的 CSS background)
-          const bgGradient = ctx.createRadialGradient(width * 0.5, height * 0.3, 0, width * 0.5, height * 0.5, height * 0.8);
-          bgGradient.addColorStop(0, '#3f0000'); // 亮部中心
-          bgGradient.addColorStop(1, '#0a0000'); // 暗部邊緣
-          ctx.fillStyle = bgGradient;
-          ctx.fillRect(0, 0, width, height);
+        const renderLoop = () => {
+          PHYSICS.windPhase += 0.01;
 
-          // 補充星塵
-          if (dusts.length < 80) {
-            dusts.push(new GoldDust(width, height));
+          // 1. 繪製背景 (依據主題)
+          if (isMinimal) {
+            ctx.fillStyle = '#0a0a0a'; // 極致黑
+            ctx.fillRect(0, 0, width, height);
+          } else {
+            // 節慶深度紅漸層
+            const grad = ctx.createRadialGradient(width/2, height*0.3, 0, width/2, height/2, height);
+            grad.addColorStop(0, '#3a0000');
+            grad.addColorStop(1, '#0c0000');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, width, height);
+          }
+
+          // 2. 更新與繪製實體
+          if (!isMinimal) {
+            leftLantern.update(); leftLantern.draw(ctx);
+            rightLantern.update(); rightLantern.draw(ctx);
           }
           
-          // 補充紅包 (控制頻率，避免畫面過度雜亂，符合 iOS 簡潔美學)
-          if (Math.random() < 0.02 && envelopes.length < 15) {
-            envelopes.push(new RedEnvelope(width, height));
-          }
+          horse.update(); horse.draw(ctx, isMinimal);
 
-          // 繪製與更新星塵
-          for (let i = dusts.length - 1; i >= 0; i--) {
-            const d = dusts[i];
+          dusts.forEach(d => {
             d.update();
-            d.draw(ctx);
-            if (d.isDead()) dusts.splice(i, 1);
-          }
+            d.draw(ctx, isMinimal);
+          });
 
-          // 繪製一匹極簡的馬年浮水印 (使用 Path2D 繪製幾何線條)
-          ctx.save();
-          ctx.translate(width * 0.5, height * 0.4);
-          ctx.scale(1.5, 1.5);
-          ctx.globalAlpha = 0.05; // 極度淡化，營造呼吸感留白
-          ctx.strokeStyle = '#fbbf24';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          // 簡化的摺紙風格馬匹輪廓
-          ctx.moveTo(10, -30);
-          ctx.lineTo(20, -10);
-          ctx.lineTo(-10, 10);
-          ctx.lineTo(-30, 40);
-          ctx.lineTo(-10, 50);
-          ctx.lineTo(20, 20);
-          ctx.lineTo(40, 50);
-          ctx.lineTo(60, 40);
-          ctx.lineTo(30, -10);
-          ctx.closePath();
-          ctx.stroke();
-          ctx.restore();
-
-          // 繪製與更新紅包雨
-          for (let i = envelopes.length - 1; i >= 0; i--) {
-            const e = envelopes[i];
-            // 重力會根據紅包質量產生不同加速度
-            const weight = new Vector2(0, gravity.y * e.mass);
-            e.applyForce(weight);
-            e.update();
-            e.draw(ctx);
-            if (e.isDead()) envelopes.splice(i, 1);
-          }
-
-          animationFrameId = requestAnimationFrame(render);
+          animationId = requestAnimationFrame(renderLoop);
         };
 
-        render();
+        renderLoop();
 
         return () => {
-          window.removeEventListener('resize', setupCanvas);
-          cancelAnimationFrame(animationFrameId);
+          window.removeEventListener('resize', initScene);
+          cancelAnimationFrame(animationId);
         };
-      }, []);
+      }, [theme]); // 當主題切換時重新綁定引擎設定
 
       return <canvas id="fx-canvas" ref={canvasRef} />;
     };
 
     /* =====================================================================
-       UI 元件庫：Svg Icons
-       使用更細緻、圓潤的線條，呼應 iOS 的 Human Interface Guidelines。
+       [UI 系統] 矢量圖示庫
+       所有 Icon 堅持使用 SVG 確保 Retina 螢幕不模糊。
     ===================================================================== */
-    const Icon = ({ name, className = "w-6 h-6", strokeWidth = "1.5" }) => {
+    const Icon = ({ name, className = "w-6 h-6", strokeWidth = "2" }) => {
       const svgs = {
         trophy: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+        play: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>,
         history: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>,
-        play: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M10 8l6 4-6 4V8z"/></svg>,
         minus: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>,
         plus: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-        info: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>,
+        info: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
+        palette: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.836-.437-1.124-.298-.336-.498-.76-.498-1.226 0-.962.775-1.742 1.734-1.742H16c3.31 0 6-2.69 6-6 0-5.5-4.5-10-10-10z"/></svg>,
         crown: <svg className={className} viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M2.2 19.5h19.6v2H2.2v-2zm1.4-2.8l2.8-10.2L12 13.8l5.6-7.3 2.8 10.2H3.6z"/></svg>,
         close: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       };
@@ -392,87 +515,88 @@
     };
 
     /* =====================================================================
-       領域元件：記分卡片 (Play Tab)
-       大幅增加卡片內的留白、文字解說與圓角，讓操作更直覺。
+       [UI 元件] 玩家計分操作卡片 (Player Control Card)
+       針對長輩優化：壓縮無用留白，放大互動熱區，按鈕寬度極大化。
     ===================================================================== */
-    const PlayerControlCard = ({ 
-      player, 
-      currentCards, 
-      twoCount, 
-      onChangeCard, 
-      onToggleTwo 
-    }) => {
-      const isWinner = currentCards === 0;
+    const PlayerCard = ({ player, cards, twoCount, theme, onUpdateCards, onToggleTwo }) => {
+      const isWinner = cards === 0;
+      const isMinimal = theme === 'minimal';
       
-      // 動態判定卡片狀態，給予不同的視覺回饋
-      const cardStateClass = isWinner 
-        ? 'opacity-60 grayscale-[30%]' // 脫手者呈現半隱藏狀態
-        : twoCount > 0 
-          ? 'ring-2 ring-amber-500/50 bg-amber-900/20' // 握有老二的高風險警告
-          : '';
+      // 依據主題給予不同的卡片底色與框線
+      const cardClass = isMinimal ? 'ui-card-minimal' : 'ui-card-festive';
+      // 當脫手時，整張卡片調暗退居幕後
+      const stateClass = isWinner ? 'opacity-50 grayscale-[50%]' : '';
+      
+      // 老二狀態的視覺呈現：危險訊號用紅/橘色高亮
+      let badgeStyle = "bg-white/10 text-white/50 border border-white/10";
+      let badgeText = "平靜無波";
+      if (isWinner) {
+        badgeStyle = "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        badgeText = "🎉 順利脫手";
+      } else if (twoCount > 0) {
+        badgeStyle = "bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-[0_0_10px_rgba(244,63,94,0.3)]";
+        badgeText = `💣 扣留老二 × ${twoCount}`;
+      }
 
       return (
-        <div className={`ios-glass-card p-5 transition-all duration-300 ${cardStateClass}`}>
-          <div className="flex items-center justify-between mb-4">
-            {/* 左側：身分與狀態標籤 */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[22px] font-bold tracking-wide text-white">{player.name}</span>
+        <div className={`${cardClass} ${stateClass} p-3 flex flex-col justify-center transition-all duration-300 h-full`}>
+          <div className="flex items-center justify-between h-full px-1">
+            
+            {/* 左半部：身分與狀態 */}
+            <div className="flex flex-col items-start gap-1.5 w-[35%]">
+              <span className={`text-[24px] font-black tracking-widest leading-none ${isMinimal ? 'text-white' : 'text-[#fef08a]'}`}>
+                {player.name}
+              </span>
               <button 
                 onClick={onToggleTwo}
                 disabled={isWinner}
-                className={`
-                  w-fit px-3 py-1.5 rounded-full text-[12px] font-semibold flex items-center gap-1 transition-all ios-active-scale
-                  ${isWinner 
-                    ? 'bg-white/10 text-white/40' 
-                    : twoCount > 0 
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
-                      : 'bg-white/5 text-white/60 border border-white/10'
-                  }
-                `}
+                className={`px-2.5 py-1 rounded-md text-[13px] font-bold whitespace-nowrap transition-colors btn-press ${badgeStyle}`}
               >
-                {isWinner ? '🎉 漂亮脫手' : twoCount > 0 ? `💣 扣留老二 × ${twoCount}` : '平靜無波 (無老二)'}
+                {badgeText}
               </button>
             </div>
-            
-            {/* 右側：步進器 (Stepper) 控制牌數 */}
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-[11px] text-white/40 font-medium tracking-wider">目前手牌數</span>
-              <div className="flex items-center gap-2 bg-black/40 p-1.5 rounded-[20px] border border-white/5 shadow-inner">
-                <button 
-                  onClick={() => onChangeCard(-1)} 
-                  className="w-11 h-11 rounded-[14px] bg-white/10 flex items-center justify-center text-white/80 ios-active-scale hover:bg-white/20 transition-colors"
-                >
-                  <Icon name="minus" className="w-5 h-5" />
-                </button>
-                <div className="w-12 text-center text-[28px] font-bold tabular-nums text-white">
-                  {currentCards}
-                </div>
-                <button 
-                  onClick={() => onChangeCard(1)} 
-                  className="w-11 h-11 rounded-[14px] bg-white/10 flex items-center justify-center text-white/80 ios-active-scale hover:bg-white/20 transition-colors"
-                >
-                  <Icon name="plus" className="w-5 h-5" />
-                </button>
+
+            {/* 右半部：巨無霸步進器 (Stepper) */}
+            <div className="flex items-center gap-1.5 w-[60%] justify-end">
+              <button 
+                onClick={() => onUpdateCards(-1)} 
+                className={`w-[52px] h-[52px] rounded-2xl flex items-center justify-center btn-press transition-colors
+                  ${isMinimal ? 'bg-white/10 text-white active:bg-white/20' : 'bg-[#7f1d1d]/80 text-[#fca5a5] border border-[#991b1b] active:bg-[#991b1b]'}
+                `}
+                aria-label="減少一張牌"
+              >
+                <Icon name="minus" className="w-7 h-7" strokeWidth="3" />
+              </button>
+              
+              <div className={`w-[54px] text-center text-[38px] font-black num-display leading-none 
+                ${cards >= 8 && !isWinner ? 'text-rose-400' : 'text-white'}
+              `}>
+                {cards}
               </div>
+              
+              <button 
+                onClick={() => onUpdateCards(1)} 
+                className={`w-[52px] h-[52px] rounded-2xl flex items-center justify-center btn-press transition-colors
+                  ${isMinimal ? 'bg-white/10 text-white active:bg-white/20' : 'bg-[#7f1d1d]/80 text-[#fca5a5] border border-[#991b1b] active:bg-[#991b1b]'}
+                `}
+                aria-label="增加一張牌"
+              >
+                <Icon name="plus" className="w-7 h-7" strokeWidth="3" />
+              </button>
             </div>
-          </div>
-          
-          {/* 進度條指示器 (滿牌13張) */}
-          <div className="w-full h-1.5 bg-black/50 rounded-full overflow-hidden">
-            <div 
-              className={`h-full rounded-full transition-all duration-300 ${isWinner ? 'bg-emerald-400' : currentCards >= 8 ? 'bg-red-500' : 'bg-amber-400'}`}
-              style={{ width: `${(currentCards / 13) * 100}%` }}
-            />
+
           </div>
         </div>
       );
     };
 
     /* =====================================================================
-       主應用程式邏輯 (State & Controllers)
-       這裡的結算邏輯完全遵循你的既有規則，不作任何更動。
+       [主體應用] App 元件
+       負責邏輯調度與佈局控制。
+       絕對禁止更動計分核心邏輯，確保升級 UI 的同時不會弄壞算錢功能。
     ===================================================================== */
     const App = () => {
+      // 初始化固定玩家資料
       const INITIAL_PLAYERS = useMemo(() => [
         { id: 'p1', name: '爸爸', score: 0 },
         { id: 'p2', name: '媽媽', score: 0 },
@@ -480,52 +604,53 @@
         { id: 'p4', name: '妹妹', score: 0 },
       ], []);
 
-      // 狀態管理
-      const [players, setPlayers] = useState(INITIAL_PLAYERS);
-      const [history, setHistory] = useState([]);
-      const [activeTab, setActiveTab] = useState('play');
+      // 核心狀態管理 (透過 localStorage 持久化)
+      const [players, setPlayers] = useStickyState(INITIAL_PLAYERS, 'b2_players_v3');
+      const [history, setHistory] = useStickyState([], 'b2_history_v3');
+      const [theme, setTheme] = useStickyState('festive', 'b2_theme_v3'); // 'festive' | 'minimal'
+      
+      // 當前局數的暫存狀態
+      const [activeTab, setActiveTab] = useState('play'); // 'play', 'scores', 'history'
       const [currentCards, setCurrentCards] = useState({ p1: 0, p2: 0, p3: 0, p4: 0 });
       const [twoCounts, setTwoCounts] = useState({ p1: 0, p2: 0, p3: 0, p4: 0 });
       const [winnerTwoCount, setWinnerTwoCount] = useState(0);
+      
+      // UI 疊加層控制
       const [showRules, setShowRules] = useState(false);
 
-      // 初始化資料讀取
-      useEffect(() => {
-        const savedP = localStorage.getItem('big2_players_ios26_pro');
-        const savedH = localStorage.getItem('big2_history_ios26_pro');
-        if (savedP) setPlayers(JSON.parse(savedP));
-        if (savedH) setHistory(JSON.parse(savedH));
-      }, []);
-
-      // 資料變更時自動儲存
-      useEffect(() => {
-        localStorage.setItem('big2_players_ios26_pro', JSON.stringify(players));
-        localStorage.setItem('big2_history_ios26_pro', JSON.stringify(history));
-      }, [players, history]);
-
-      // 操作：調整牌數
-      const changeCard = useCallback((id, delta) => {
+      // --- 邏輯操作：更新手牌 ---
+      const handleCardChange = useCallback((id, delta) => {
         setCurrentCards(prev => {
           const newVal = Math.max(0, Math.min(13, prev[id] + delta));
-          if (newVal === 0) setTwoCounts(p => ({ ...p, [id]: 0 }));
+          // 如果牌數歸零（脫手），強制清空他手上的老二紀錄
+          if (newVal === 0) {
+            setTwoCounts(p => ({ ...p, [id]: 0 }));
+          }
           return { ...prev, [id]: newVal };
         });
       }, []);
 
-      // 操作：切換持有的老二數量 (0~4)
-      const toggleTwo = useCallback((id) => {
-        if (currentCards[id] === 0) return;
-        setTwoCounts(prev => ({ ...prev, [id]: (prev[id] + 1) % 5 }));
+      // --- 邏輯操作：切換扣留老二數量 ---
+      const handleTwoToggle = useCallback((id) => {
+        if (currentCards[id] === 0) return; // 沒牌的人不能扣老二
+        setTwoCounts(prev => ({ ...prev, [id]: (prev[id] + 1) % 5 })); // 0 -> 1 -> 2 -> 3 -> 4 -> 0
       }, [currentCards]);
 
-      // 核心邏輯：結算金額 (保留原汁原味)
-      const calculate = useCallback(() => {
+      // --- 邏輯操作：核心結算引擎 (完全遵循原有商業邏輯) ---
+      const handleCalculate = useCallback(() => {
         const pIds = ['p1', 'p2', 'p3', 'p4'];
         const winners = pIds.filter(id => currentCards[id] === 0);
         
         if (winners.length !== 1) {
-          // 使用自製的 Modal 取代 alert，但這裡簡單起見先保留你的防呆警告
-          alert("必須剛好有一人脫手（剩 0 張）才能結算喔！");
+          // 自製輕量提示取代系統 alert，保持 UI 一致性
+          const msg = document.createElement('div');
+          msg.textContent = "請確認剛好有一人脫手（剩 0 張）";
+          msg.className = "fixed top-20 left-1/2 -translate-x-1/2 bg-rose-600 text-white px-6 py-3 rounded-full shadow-2xl z-[999] font-bold tracking-wider animate-in fade-in slide-in-from-top-4";
+          document.body.appendChild(msg);
+          setTimeout(() => {
+            msg.classList.add('animate-out', 'fade-out', 'slide-out-to-top-4');
+            setTimeout(() => msg.remove(), 300);
+          }, 2000);
           return;
         }
 
@@ -533,146 +658,181 @@
         let totalPot = 0;
         const roundScores = {};
 
+        // 走訪所有玩家，計算輸家扣分
         pIds.forEach(id => {
           if (id === winnerId) {
-            roundScores[id] = 0;
+            roundScores[id] = 0; // 贏家暫時為 0，稍後加總
           } else {
-            let p = currentCards[id];
-            if (p >= 8) p *= 2; // 滿8張以上雙倍
-            if (twoCounts[id] > 0) p *= Math.pow(2, twoCounts[id]); // 扣老二翻倍
-            if (winnerTwoCount > 0) p *= Math.pow(2, winnerTwoCount); // 贏家老二尾全場翻倍
-            roundScores[id] = -p;
-            totalPot += p;
+            let p = currentCards[id]; // 基本張數
+            if (p >= 8) p *= 2; // 滿8張以上直接雙倍
+            if (twoCounts[id] > 0) p *= Math.pow(2, twoCounts[id]); // 手扣老二翻倍
+            if (winnerTwoCount > 0) p *= Math.pow(2, winnerTwoCount); // 贏家大招全場翻倍
+            
+            roundScores[id] = -p; // 記為負分
+            totalPot += p; // 累加至彩池
           }
         });
 
+        // 贏家拿走所有彩池
         roundScores[winnerId] = totalPot;
         
-        // 更新玩家總分
-        setPlayers(prev => prev.map(p => ({ ...p, score: p.score + roundScores[p.id] })));
+        // 更新總分狀態
+        setPlayers(prev => prev.map(p => ({ 
+          ...p, 
+          score: p.score + roundScores[p.id] 
+        })));
         
-        // 寫入歷史紀錄
-        setHistory([{
+        // 寫入對戰明細
+        setHistory(prev => [{
           id: Date.now(),
           time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
           scores: roundScores,
           isExtreme: winnerTwoCount > 0
-        }, ...history]);
+        }, ...prev]);
 
-        // 狀態重置並切換畫面
+        // 桌面清理與畫面切換
         setCurrentCards({ p1: 0, p2: 0, p3: 0, p4: 0 });
         setTwoCounts({ p1: 0, p2: 0, p3: 0, p4: 0 });
         setWinnerTwoCount(0);
         setActiveTab('scores');
-      }, [currentCards, twoCounts, winnerTwoCount, history]);
+      }, [currentCards, twoCounts, winnerTwoCount]);
 
-      // 操作：洗牌重啟
-      const handleReset = useCallback(() => {
-        if(window.confirm("確定要把所有人的分數歸零，重新開始嗎？\n這將會清除所有戰報紀錄。")) {
+      // --- 邏輯操作：重新洗牌 ---
+      const handleResetAll = useCallback(() => {
+        if(window.confirm("確定要把所有人的分數歸零？\n過往的戰報明細也會一併清空喔！")) {
           setPlayers(INITIAL_PLAYERS);
           setHistory([]);
+          setActiveTab('play');
         }
       }, [INITIAL_PLAYERS]);
 
-      /* =====================================================================
-         畫面渲染區塊
-      ===================================================================== */
+      // --- 畫面渲染 ---
+      const isMinimal = theme === 'minimal';
+
       return (
         <>
-          {/* 底層 Canvas 負責所有視覺特效 */}
-          <CanvasManager />
+          {/* 渲染底層 Canvas (負責所有動畫與底色) */}
+          <CanvasEngine theme={theme} />
 
-          {/* 上層 UI 容器：絕對定位、不捲動、處理安全區 */}
+          {/* UI 容器：這是一個高度正好等於螢幕可視範圍 (100dvh) 的絕對容器。
+            我們用 flex-col 將它分為三個部分：Header(固定), Main(彈性), Footer(固定)。
+            pointer-events-none 確保未被元件佔據的地方可以讓點擊穿透（雖然這裡沒有需求，但好習慣）。
+          */}
           <div className="absolute inset-0 z-10 flex flex-col mx-auto max-w-md pointer-events-none">
             
-            {/* Header: 空間壓縮但維持優雅 */}
-            <header className="pt-[calc(var(--safe-top)+16px)] pb-4 px-6 flex justify-between items-start shrink-0 pointer-events-auto">
+            {/* 1. 頂部標題區塊 (Header) */}
+            <header className="pt-[calc(var(--safe-top)+12px)] pb-3 px-5 flex justify-between items-center shrink-0 pointer-events-auto">
               <div className="flex flex-col gap-0.5">
-                <span className="text-[13px] font-bold tracking-[0.2em] text-white/70 uppercase">Year of the Horse</span>
-                <h1 className="text-[32px] font-black tracking-tight text-shine-gold drop-shadow-xl">
+                <span className={`text-[12px] font-bold tracking-[0.2em] uppercase ${isMinimal ? 'text-white/40' : 'text-amber-500/80'}`}>
+                  Year of the Horse
+                </span>
+                <h1 className={`text-[30px] font-black tracking-tight leading-none ${isMinimal ? 'text-white' : 'text-gold-shine drop-shadow-lg'}`}>
                   大老二記分所
                 </h1>
               </div>
-              <button 
-                onClick={() => setShowRules(true)} 
-                className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center ios-active-scale backdrop-blur-md mt-1"
-                aria-label="查看江湖規矩"
-              >
-                <Icon name="info" className="w-6 h-6 text-white/90" />
-              </button>
+              
+              <div className="flex items-center gap-2">
+                {/* 主題切換按鈕 */}
+                <button 
+                  onClick={() => setTheme(prev => prev === 'festive' ? 'minimal' : 'festive')}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center btn-press backdrop-blur-md border transition-all duration-500
+                    ${isMinimal ? 'bg-white/10 border-white/20 text-white' : 'bg-amber-900/50 border-amber-500/30 text-amber-400'}
+                  `}
+                  aria-label="切換視覺主題"
+                >
+                  <Icon name="palette" className="w-5 h-5" strokeWidth="2.5" />
+                </button>
+                {/* 說明按鈕 */}
+                <button 
+                  onClick={() => setShowRules(true)} 
+                  className={`w-9 h-9 rounded-full flex items-center justify-center btn-press backdrop-blur-md border transition-all
+                    ${isMinimal ? 'bg-white/10 border-white/20 text-white' : 'bg-red-900/50 border-red-500/30 text-white'}
+                  `}
+                  aria-label="查看規則"
+                >
+                  <Icon name="info" className="w-5 h-5" strokeWidth="2.5" />
+                </button>
+              </div>
             </header>
 
-            {/* Main Content: 依照 activeTab 顯示不同內容 */}
-            <main className="flex-1 relative flex flex-col px-5 pb-[calc(90px+var(--safe-bottom))] min-h-0 pointer-events-auto">
+            {/* 2. 主要內容區塊 (Main) - 使用 flex-1 吃滿剩餘空間，min-h-0 允許內部壓縮避免破版 */}
+            <main className="flex-1 relative flex flex-col px-4 pb-[calc(76px+var(--safe-bottom))] min-h-0 pointer-events-auto">
               
-              {/* --- 畫面 A：記分操作 (Play) --- */}
+              {/* === 分頁 A：操作區 (Play) === */}
               {activeTab === 'play' && (
-                <div className="flex-1 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-300">
-                  {/* 玩家卡片列表 */}
-                  <div className="flex flex-col gap-4 flex-1 min-h-0 py-2">
-                    {INITIAL_PLAYERS.map(base => (
-                      <PlayerControlCard 
-                        key={base.id}
-                        player={players.find(x => x.id === base.id)}
-                        currentCards={currentCards[base.id]}
-                        twoCount={twoCounts[base.id]}
-                        onChangeCard={(delta) => changeCard(base.id, delta)}
-                        onToggleTwo={() => toggleTwo(base.id)}
-                      />
+                <div className="flex-1 flex flex-col justify-between animate-in fade-in duration-300 h-full">
+                  
+                  {/* 玩家卡片區：利用 flex-1 與 justify-evenly 在垂直方向完美均分，免捲動！ */}
+                  <div className="flex-1 flex flex-col justify-evenly gap-2 min-h-0 py-1">
+                    {INITIAL_PLAYERS.map(pBase => (
+                      <div key={pBase.id} className="flex-1 min-h-[70px] max-h-[95px]">
+                        <PlayerCard 
+                          player={players.find(x => x.id === pBase.id)}
+                          cards={currentCards[pBase.id]}
+                          twoCount={twoCounts[pBase.id]}
+                          theme={theme}
+                          onUpdateCards={(delta) => handleCardChange(pBase.id, delta)}
+                          onToggleTwo={() => handleTwoToggle(pBase.id)}
+                        />
+                      </div>
                     ))}
                   </div>
 
-                  {/* 底部行動區：結算按鈕與全場加成 */}
-                  <div className="shrink-0 pt-4 space-y-3 relative z-10">
+                  {/* 結算行動區：固定於 Play 分頁底部 */}
+                  <div className="shrink-0 pt-3 flex flex-col gap-2">
                     <button 
                       onClick={() => setWinnerTwoCount(v => (v + 1) % 5)}
                       className={`
-                        w-full py-3.5 rounded-[20px] text-[15px] font-bold transition-all duration-300 ios-active-scale flex items-center justify-center gap-2
+                        w-full py-2.5 rounded-xl text-[14px] font-bold transition-all duration-300 btn-press border flex justify-center items-center gap-2
                         ${winnerTwoCount > 0 
-                          ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white shadow-[0_0_20px_rgba(220,38,38,0.4)] border border-red-400/50' 
-                          : 'ios-glass-card text-white/80'
+                          ? 'bg-rose-600 text-white border-rose-400 shadow-[0_0_15px_rgba(225,29,72,0.4)]' 
+                          : isMinimal ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/30 border-white/10 text-white/70 backdrop-blur-sm'
                         }
                       `}
                     >
                       {winnerTwoCount > 0 ? (
-                        <><span>🔥 大招：贏家老二結尾 × {winnerTwoCount}</span><span className="text-[11px] bg-black/30 px-2 py-0.5 rounded-md">全場翻倍</span></>
+                        <>🔥 贏家老二結尾 × {winnerTwoCount} <span className="bg-black/40 px-2 py-0.5 rounded text-[11px]">全場加倍</span></>
                       ) : (
-                        <span>贏家以一般牌型脫手</span>
+                        <span>贏家一般牌型脫手</span>
                       )}
                     </button>
                     
                     <button 
-                      onClick={calculate}
-                      className="w-full h-[64px] rounded-[24px] bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-600 text-[#2a0000] text-[22px] font-black tracking-[0.1em] ios-active-scale shadow-[0_12px_30px_rgba(245,158,11,0.3)] border-b-2 border-amber-700"
+                      onClick={handleCalculate}
+                      className={`
+                        w-full h-[58px] rounded-2xl text-[22px] font-black tracking-[0.15em] btn-press transition-all
+                        ${isMinimal 
+                          ? 'bg-white text-black hover:bg-gray-200' 
+                          : 'bg-gradient-to-b from-amber-400 to-amber-600 text-[#3a0000] border-b-4 border-amber-700 shadow-[0_8px_20px_rgba(245,158,11,0.3)]'}
+                      `}
                     >
-                      封盤收錢
+                      結算收錢
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* --- 畫面 B：戰績結算 (Scores) --- */}
+              {/* === 分頁 B：戰績排行 (Scores) === */}
               {activeTab === 'scores' && (
-                <div className="flex-1 flex flex-col justify-center animate-in slide-in-from-bottom-8 duration-400">
-                  <div className="ios-glass-card overflow-hidden flex flex-col w-full">
-                    <div className="px-6 py-4 bg-black/20 border-b border-white/10 flex justify-between items-center">
-                      <h2 className="text-[18px] font-bold text-amber-400 tracking-widest">目前排名</h2>
-                      <span className="text-[12px] text-white/40">總結算結果</span>
+                <div className="flex-1 flex flex-col justify-center gap-6 animate-in slide-in-from-bottom-8 duration-300">
+                  <div className={`overflow-hidden flex flex-col w-full ${isMinimal ? 'ui-card-minimal' : 'ui-card-festive'}`}>
+                    <div className="px-5 py-3 bg-black/30 border-b border-white/10 flex justify-between items-center">
+                      <h2 className={`text-[16px] font-bold tracking-widest ${isMinimal ? 'text-white' : 'text-amber-400'}`}>大局戰報</h2>
+                      <span className="text-[12px] text-white/40">即時累積</span>
                     </div>
                     <div className="flex flex-col">
                       {[...players].sort((a, b) => b.score - a.score).map((p, idx) => {
-                        const isFirst = idx === 0 && p.score > 0;
-                        const scoreColor = p.score > 0 ? 'text-emerald-400' : p.score < 0 ? 'text-rose-400' : 'text-white/40';
+                        const isLeader = idx === 0 && p.score > 0;
+                        const sColor = p.score > 0 ? 'text-emerald-400' : p.score < 0 ? 'text-rose-400' : 'text-white/40';
                         return (
-                          <div key={p.id} className={`relative px-6 py-5 flex items-center justify-between border-b border-white/5 last:border-0 ${isFirst ? 'bg-amber-500/10' : ''}`}>
-                            {isFirst && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-300 to-yellow-500 rounded-r-md"></div>}
+                          <div key={p.id} className={`relative px-6 py-4 flex items-center justify-between border-b border-white/5 last:border-0 ${isLeader ? 'bg-amber-500/10' : ''}`}>
                             <div className="flex items-center gap-4">
                               <div className="w-8 flex justify-center">
-                                {isFirst ? <Icon name="crown" className="w-8 h-8 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]" /> : <span className="text-[20px] font-bold text-white/30">{idx + 1}</span>}
+                                {isLeader ? <Icon name="crown" className={`w-8 h-8 ${isMinimal ? 'text-white' : 'text-amber-400 drop-shadow-md'}`} /> : <span className="text-[20px] font-bold text-white/30">{idx + 1}</span>}
                               </div>
-                              <span className="text-[22px] font-semibold tracking-wide text-white">{p.name}</span>
+                              <span className="text-[22px] font-bold tracking-wide text-white">{p.name}</span>
                             </div>
-                            <span className={`text-[32px] font-black tabular-nums tracking-tight ${scoreColor}`}>
+                            <span className={`text-[32px] font-black num-display ${sColor}`}>
                               {p.score > 0 ? `+${p.score}` : p.score}
                             </span>
                           </div>
@@ -681,46 +841,43 @@
                     </div>
                   </div>
                   
-                  <div className="mt-8 px-2">
-                    <button 
-                      onClick={handleReset} 
-                      className="w-full h-[56px] rounded-[20px] text-[16px] font-bold tracking-widest text-amber-500 bg-black/40 border border-amber-900/50 backdrop-blur-md ios-active-scale"
-                    >
-                      重新洗牌，開新局
-                    </button>
-                  </div>
+                  <button 
+                    onClick={handleResetAll} 
+                    className={`w-full h-[54px] rounded-2xl text-[16px] font-bold tracking-widest btn-press border
+                      ${isMinimal ? 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10' : 'bg-black/40 border-amber-900/50 text-amber-500 backdrop-blur-md'}
+                    `}
+                  >
+                    分數歸零．重啟新局
+                  </button>
                 </div>
               )}
 
-              {/* --- 畫面 C：歷史明細 (History) --- */}
+              {/* === 分頁 C：明細清單 (History) === */}
               {activeTab === 'history' && (
-                <div className="flex-1 no-scrollbar pt-2 space-y-4 pb-10 animate-in slide-in-from-bottom-8 duration-400">
+                <div className="flex-1 history-scroll pt-2 space-y-3 pb-6 animate-in slide-in-from-bottom-8 duration-300">
                   {history.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-white/40 opacity-70">
-                      <Icon name="history" className="w-16 h-16 mb-4 stroke-1" />
-                      <p className="text-[18px] tracking-widest">目前尚無戰報紀錄</p>
+                    <div className="h-full flex flex-col items-center justify-center text-white/30">
+                      <Icon name="history" className="w-14 h-14 mb-3" strokeWidth="1" />
+                      <p className="text-[16px] tracking-widest font-medium">牌桌剛開，尚無戰果</p>
                     </div>
                   ) : (
                     history.map((rec) => (
-                      <div key={rec.id} className="ios-glass-card p-5 transition-transform hover:scale-[1.02]">
-                        <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
-                            <span className="text-[15px] font-medium text-white/80">{rec.time}</span>
-                          </div>
+                      <div key={rec.id} className={`p-4 ${isMinimal ? 'ui-card-minimal' : 'ui-card-festive'} opacity-90 hover:opacity-100 transition-opacity`}>
+                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/10">
+                          <span className="text-[14px] font-medium text-white/60">{rec.time}</span>
                           {rec.isExtreme && (
-                            <span className="text-[12px] font-bold bg-gradient-to-r from-red-600 to-rose-600 text-white px-3 py-1 rounded-[10px] shadow-sm">
-                              大招觸發
+                            <span className="text-[11px] font-bold bg-rose-600 text-white px-2 py-0.5 rounded shadow-sm">
+                              老二大招
                             </span>
                           )}
                         </div>
-                        <div className="grid grid-cols-4 gap-3 text-center">
+                        <div className="grid grid-cols-4 gap-2 text-center">
                           {INITIAL_PLAYERS.map(p => {
                             const s = rec.scores[p.id];
                             return (
-                              <div key={p.id} className="bg-black/20 py-2 rounded-[12px]">
-                                <div className="text-[13px] text-white/50 mb-1">{p.name}</div>
-                                <div className={`text-[18px] font-black tabular-nums ${s > 0 ? 'text-emerald-400' : s < 0 ? 'text-rose-400' : 'text-white/30'}`}>
+                              <div key={p.id} className="bg-black/20 py-2 rounded-lg">
+                                <div className="text-[12px] text-white/50 mb-0.5">{p.name}</div>
+                                <div className={`text-[16px] font-black num-display ${s > 0 ? 'text-emerald-400' : s < 0 ? 'text-rose-400' : 'text-white/30'}`}>
                                   {s > 0 ? `+${s}` : s}
                                 </div>
                               </div>
@@ -734,74 +891,70 @@
               )}
             </main>
 
-            {/* Bottom Navigation: 完美貼合安全區 */}
-            <nav className="absolute bottom-0 w-full ios-glass-nav pb-[var(--safe-bottom)] pt-3 z-20 shrink-0 pointer-events-auto">
-              <div className="flex justify-around items-center max-w-sm mx-auto px-6">
-                <button onClick={() => setActiveTab('scores')} className="relative flex flex-col items-center gap-1.5 w-20 py-2 ios-active-scale group">
-                  <Icon name="trophy" className={`w-7 h-7 transition-colors duration-300 ${activeTab === 'scores' ? 'text-amber-400' : 'text-white/40 group-hover:text-white/60'}`} />
-                  <span className={`text-[12px] font-bold tracking-wider transition-colors duration-300 ${activeTab === 'scores' ? 'text-amber-400' : 'text-white/40'}`}>戰報</span>
-                  {activeTab === 'scores' && <div className="absolute -top-3 w-10 h-1.5 bg-amber-400 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.8)]"></div>}
+            {/* 3. 底部導航區塊 (Bottom Nav) - 採用絕對定位貼底 */}
+            <nav className="absolute bottom-0 w-full ui-nav-bar pb-[var(--safe-bottom)] pt-2 z-20 shrink-0 pointer-events-auto">
+              <div className="flex justify-evenly items-center max-w-sm mx-auto">
+                <button onClick={() => setActiveTab('scores')} className="relative flex flex-col items-center gap-1 w-20 py-2 btn-press">
+                  <Icon name="trophy" className={`w-6 h-6 transition-colors ${activeTab === 'scores' ? (isMinimal?'text-white':'text-amber-400') : 'text-white/30'}`} strokeWidth={activeTab === 'scores' ? "2.5" : "2"} />
+                  <span className={`text-[11px] font-bold tracking-wider transition-colors ${activeTab === 'scores' ? (isMinimal?'text-white':'text-amber-400') : 'text-white/30'}`}>戰報</span>
                 </button>
-                <button onClick={() => setActiveTab('play')} className="relative flex flex-col items-center gap-1.5 w-20 py-2 ios-active-scale group">
-                  <Icon name="play" className={`w-7 h-7 transition-colors duration-300 ${activeTab === 'play' ? 'text-amber-400' : 'text-white/40 group-hover:text-white/60'}`} />
-                  <span className={`text-[12px] font-bold tracking-wider transition-colors duration-300 ${activeTab === 'play' ? 'text-amber-400' : 'text-white/40'}`}>記分</span>
-                  {activeTab === 'play' && <div className="absolute -top-3 w-10 h-1.5 bg-amber-400 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.8)]"></div>}
+                <button onClick={() => setActiveTab('play')} className="relative flex flex-col items-center gap-1 w-20 py-2 btn-press">
+                  <Icon name="play" className={`w-6 h-6 transition-colors ${activeTab === 'play' ? (isMinimal?'text-white':'text-amber-400') : 'text-white/30'}`} strokeWidth={activeTab === 'play' ? "2.5" : "2"} />
+                  <span className={`text-[11px] font-bold tracking-wider transition-colors ${activeTab === 'play' ? (isMinimal?'text-white':'text-amber-400') : 'text-white/30'}`}>記分</span>
                 </button>
-                <button onClick={() => setActiveTab('history')} className="relative flex flex-col items-center gap-1.5 w-20 py-2 ios-active-scale group">
-                  <Icon name="history" className={`w-7 h-7 transition-colors duration-300 ${activeTab === 'history' ? 'text-amber-400' : 'text-white/40 group-hover:text-white/60'}`} />
-                  <span className={`text-[12px] font-bold tracking-wider transition-colors duration-300 ${activeTab === 'history' ? 'text-amber-400' : 'text-white/40'}`}>明細</span>
-                  {activeTab === 'history' && <div className="absolute -top-3 w-10 h-1.5 bg-amber-400 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.8)]"></div>}
+                <button onClick={() => setActiveTab('history')} className="relative flex flex-col items-center gap-1 w-20 py-2 btn-press">
+                  <Icon name="history" className={`w-6 h-6 transition-colors ${activeTab === 'history' ? (isMinimal?'text-white':'text-amber-400') : 'text-white/30'}`} strokeWidth={activeTab === 'history' ? "2.5" : "2"} />
+                  <span className={`text-[11px] font-bold tracking-wider transition-colors ${activeTab === 'history' ? (isMinimal?'text-white':'text-amber-400') : 'text-white/30'}`}>明細</span>
                 </button>
               </div>
             </nav>
           </div>
 
-          {/* Bottom Sheet: 遊戲規則 (取代陽春的 Modal) */}
+          {/* 4. 浮動面板：遊戲規則 (Bottom Sheet) */}
           {showRules && (
             <div className="absolute inset-0 z-[100] flex flex-col justify-end pointer-events-auto">
-              {/* 遮罩點擊關閉 */}
               <div 
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" 
+                className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300" 
                 onClick={() => setShowRules(false)}
               ></div>
               
-              {/* 內容區塊從底部滑出 */}
-              <div className="relative w-full bg-[#1e0505] rounded-t-[36px] p-8 pb-[calc(32px+var(--safe-bottom))] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-red-900/30 animate-in slide-in-from-bottom-full duration-400">
-                {/* 頂部拖曳把手視覺 */}
-                <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-8"></div>
+              <div className={`relative w-full rounded-t-[32px] p-6 pb-[calc(24px+var(--safe-bottom))] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-full duration-300
+                ${isMinimal ? 'bg-[#121212] border-t border-white/10' : 'bg-[#220505] border-t border-red-900/50'}
+              `}>
+                <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6"></div>
                 
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-[28px] font-black text-amber-400 tracking-widest">江湖規矩</h3>
-                  <button onClick={() => setShowRules(false)} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center ios-active-scale">
+                <div className="flex justify-between items-center mb-5">
+                  <h3 className={`text-[24px] font-black tracking-widest ${isMinimal ? 'text-white' : 'text-amber-400'}`}>江湖規矩</h3>
+                  <button onClick={() => setShowRules(false)} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center btn-press">
                     <Icon name="close" className="w-5 h-5 text-white/70" />
                   </button>
                 </div>
 
-                <div className="space-y-6 text-[17px] leading-relaxed text-white/80">
-                  <div className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-white font-bold">1</div>
-                    <p><strong className="text-white block mb-1">基本盤面</strong>剩下 1 到 7 張牌，按張數 1:1 扣除。如果手中剩下 <span className="text-amber-400 font-bold">8 張以上</span>，直接翻倍扣除。</p>
+                <div className="space-y-5 text-[16px] leading-relaxed text-white/80">
+                  <div className="flex gap-3 items-start">
+                    <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-white font-bold text-[13px] mt-0.5">1</div>
+                    <p><strong className="text-white block mb-0.5">基本盤面</strong>剩 1~7 張牌，1張扣1倍。若剩 <span className={`font-bold ${isMinimal?'text-white':'text-amber-400'}`}>8 張以上</span>，直接翻倍扣除。</p>
                   </div>
                   
-                  <div className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-white font-bold">2</div>
-                    <p><strong className="text-white block mb-1">手握老二</strong>輸家若手中扣留老二，每 1 張翻 1 倍（2張變4倍，3張變8倍，以此類推），風險極高。</p>
+                  <div className="flex gap-3 items-start">
+                    <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-white font-bold text-[13px] mt-0.5">2</div>
+                    <p><strong className="text-white block mb-0.5">手握老二</strong>輸家若被查獲手握老二，每 1 張總額乘 2 倍（2張乘4倍，以此類推）。</p>
                   </div>
 
-                  <div className="flex gap-4 items-start bg-red-950/40 p-5 rounded-[20px] border border-red-900/50 mt-2">
-                    <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center shrink-0 text-red-400 font-bold">🔥</div>
+                  <div className={`flex gap-3 items-start p-4 rounded-xl mt-2 ${isMinimal ? 'bg-white/5 border border-white/10' : 'bg-red-950/60 border border-red-900/50'}`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-bold text-[13px] mt-0.5 ${isMinimal ? 'bg-white/20 text-white' : 'bg-red-500/20 text-red-400'}`}>🔥</div>
                     <div>
-                      <strong className="text-red-400 block mb-1">大招：老二結尾</strong>
-                      <p className="text-[15px]">贏家最後一回合打出老二脫手，全場輸家強制 <span className="text-red-400 font-bold">全額翻倍</span>。可疊加多張老二結尾算倍數。</p>
+                      <strong className={`block mb-0.5 ${isMinimal ? 'text-white' : 'text-red-400'}`}>大招：老二結尾</strong>
+                      <p className="text-[14px]">贏家打出老二脫手，全場輸家 <span className={`font-bold ${isMinimal ? 'text-white' : 'text-red-400'}`}>強制全額翻倍</span>。可疊加計算。</p>
                     </div>
                   </div>
                 </div>
 
                 <button 
                   onClick={() => setShowRules(false)} 
-                  className="w-full mt-8 h-[60px] bg-white/10 hover:bg-white/20 border border-white/20 rounded-[20px] text-[18px] font-bold text-white ios-active-scale transition-colors"
+                  className="w-full mt-6 h-[56px] bg-white/10 hover:bg-white/20 rounded-xl text-[18px] font-bold text-white btn-press transition-colors"
                 >
-                  瞭解，退下吧
+                  好，我知道了
                 </button>
               </div>
             </div>
